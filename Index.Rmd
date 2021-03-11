@@ -1,0 +1,128 @@
+---
+title: "Texas's Battle: COVID-19"
+author: "David Jackson"
+date: "2021-03-11 1:15 PM/EST"
+output: 
+  html_document: 
+    fig_width: 9
+    fig_height: 7
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,warning = FALSE)
+library(ggplot2)
+library(scales)
+library(RSQLite)
+theme_set(theme_linedraw() + theme(panel.grid = element_line(linetype = 'dashed')))
+```
+
+## California's Battle with COVID-19
+
+```{r}
+rm(list=ls())
+source("../DATA/movavg.R")
+db <- db <- dbConnect(RSQLite::SQLite(),dbname= "../COVID-19-DB/NYTimes.sqlite3")
+df <- dbGetQuery(db,"select date,state,new_cases,new_deaths from STATESDAILY")
+df <- subset(df,state=="Texas"  )
+df$date <- as.Date(df$date)
+mean(df$new_cases,na.rm = TRUE)
+mean(df$new_deaths,na.rm = TRUE)
+
+sum(df$new_cases,na.rm = TRUE)
+sum(df$new_deaths,na.rm = TRUE)
+```
+
+
+```{r}
+US <- subset(df,date >="2020-04-01")
+
+US <- US[order(US$date),]
+US$MA14 <- movingAverage(US$new_cases,14)
+US$MAD <- movingAverage(US$new_deaths,14)
+```
+
+#### Daily Mortality Rate
+
+```{r}
+US$Rate <- US$new_deaths/US$new_cases
+mean(is.na(US$Rate))
+ggplot(US) + geom_line(aes(x=date,y=Rate)) +
+  labs(title="Pakistan Mortality Rate by Date ") +
+  scale_y_continuous(labels = percent) +
+  geom_hline(yintercept =mean(is.na(US$Rate)),col="red" ) +
+  scale_x_date()
+```
+
+
+### Plot of Daily new_cases and new_deaths
+
+```{r}
+ggplot(US) + geom_line(aes(x=date,y=new_cases,col="Daily new_cases")) +
+  labs(title="COVID-19 new_cases by Date") +
+  geom_smooth(aes(x=date,y=new_cases,col="Loess"),span=0.25) +
+   scale_x_date()
+  
+```
+```{r}
+ggplot(US) + geom_line(aes(x=date,y=new_deaths,col="Daily new_deaths")) +
+  labs(title="COVID-19 new_deaths by Date") + ylim(0,175) +
+  geom_smooth(aes(x=date,y=new_deaths,col="Loess"),span=0.25) +
+   scale_x_date()
+```
+```{r}
+USA <- subset(US,date >="2020-06-01")
+ggplot(USA) + geom_line(aes(x=date,y=new_cases,col="Daily new_cases")) +
+  labs(title="COVID-19 new_cases by Date (since Jun. 1, 2020)") +
+  geom_smooth(aes(x=date,y=new_cases,col="Loess"),span=0.25) +
+   scale_x_date()
+
+ggplot(USA) + geom_line(aes(x=date,y=new_deaths,col="Daily new_deaths")) +
+  labs(title="COVID-19 new_deaths by Date (since Jun. 1, 2020)") + ylim(0,175) +
+  geom_smooth(aes(x=date,y=new_deaths,col="Loess"),span=0.25) +
+   scale_x_date()
+```
+
+#### Non-Moving Average By Week and By Month
+
+```{r}
+US$Monthly <- as.Date(cut(US$date,
+  breaks = "month"))
+US$Weekly <- as.Date(cut(US$date,
+  breaks = "week",
+  start.on.monday = FALSE))
+
+```
+```{r}
+Weekly_new_cases <- aggregate(new_cases~Weekly,US,FUN=sum)
+Weekly_new_deaths <- aggregate(new_deaths~Weekly,US,FUN=sum)
+Weekly_new_cases$DRate <- Weekly_new_deaths$new_deaths/Weekly_new_cases$new_cases
+Weekly_new_cases$LivedSaved <- Weekly_new_cases$new_cases * (max(Weekly_new_cases$DRate) - Weekly_new_cases$DRate) * 100
+
+```
+```{r}
+ggplot(Weekly_new_cases) + geom_col(aes(x=Weekly,y=new_cases)) + 
+  labs(title="Weekly new_cases",x="Date date", y="Weekly new_cases") +
+  scale_y_continuous(labels=comma)
+
+ggplot(Weekly_new_deaths) + geom_col(aes(x=Weekly,y=new_deaths)) + 
+  labs(title="Weekly new_deaths",x="Date date", y="Weekly new_deaths") +
+   ylim(0,1000) + scale_y_continuous(labels=comma)
+``` 
+
+#### Monthly new_cases and new_deaths
+
+```{r}
+
+Monthly_new_cases <- aggregate(new_cases~Monthly,US,FUN=sum)
+Monthly_new_deaths <- aggregate(new_deaths~Monthly,US,FUN=sum)
+Monthly_new_cases$DRate <- Monthly_new_deaths$new_deaths/Monthly_new_cases$new_cases
+Monthly_new_cases$LivedSaved <- Monthly_new_cases$new_cases * (max(Monthly_new_cases$DRate) - Monthly_new_cases$DRate) * 100
+```
+```{r}
+ggplot(Monthly_new_cases) + geom_col(aes(x=Monthly,y=new_cases)) +
+  labs(title="Monthly new_cases")  +
+  scale_y_continuous(labels=scales::comma)
+
+ggplot(Monthly_new_deaths) + geom_col(aes(x=Monthly,y=new_deaths)) +
+  labs(title="Monthly new_deaths")
+```
